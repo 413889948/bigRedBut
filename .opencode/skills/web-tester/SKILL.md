@@ -179,6 +179,59 @@ Web 测试技能提供两种模式的端到端测试工作流：
 - 当测试发现新需求时，提议创建变更
 - 将测试报告链接到相关产出物
 
+### 与 web-developer 协作（test-and-fix 模式）
+
+当模式为 `test-and-fix` 时，web-tester 通过 **Orchestrator** 自动调用 `web-developer` 技能进行修复：
+
+```
+┌─────────────────────────────────────────────────────────┐
+│                  test-and-fix 工作流                    │
+├─────────────────────────────────────────────────────────┤
+│  1. web-tester 执行测试                                 │
+│     └─> 收集失败案例                                    │
+│                                                         │
+│  2. Orchestrator 解析失败                               │
+│     └─> 转换为修复任务 (PendingFix[])                   │
+│     └─> 更新 checkpoint.developer 状态                  │
+│                                                         │
+│  3. 调用 web-developer 技能                             │
+│     └─> TDD 修复循环 (RED → GREEN → REFACTOR)          │
+│     └─> 每个 bug 最多 3 次尝试                          │
+│                                                         │
+│  4. 状态同步                                            │
+│     └─> 更新 checkpoint.developer.completedFixes       │
+│     └─> 保存修复日志                                    │
+│                                                         │
+│  5. 验证修复                                            │
+│     └─> 重新运行测试确认修复有效                        │
+└─────────────────────────────────────────────────────────┘
+```
+
+**关键模块**：
+
+| 模块 | 路径 | 职责 |
+|------|------|------|
+| Orchestrator | `src/orchestrator/index.ts` | 编排 tester → developer 流程 |
+| Tester-Bridge | `src/orchestrator/tester-bridge.ts` | 转换失败为修复任务 |
+| State-Sync | `src/orchestrator/state-sync.ts` | 同步 checkpoint 状态 |
+
+**调用示例**：
+
+```typescript
+import { runTestAndFixFlow } from './src/orchestrator';
+
+// test-and-fix 模式
+const result = await runTestAndFixFlow({
+  projectName: 'my-web-app',
+  mode: 'test-and-fix',
+  projectDir: '/path/to/project',
+  testFiles: ['tests/e2e/**/*.spec.ts'],
+  maxFixAttempts: 3
+});
+
+console.log(`Fixed: ${result.fixStats?.fixed}/${result.fixStats?.total}`);
+```
+
 ---
 
 ## 快速开始
