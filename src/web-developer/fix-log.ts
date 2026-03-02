@@ -1,5 +1,10 @@
 import { appendFile, mkdir, readFile } from 'node:fs/promises';
 import * as path from 'node:path';
+import {
+  resolveDataDir,
+  withExecutionContext,
+  type ExecutionContext,
+} from '../execution-context';
 import type { TddAttemptLog } from './tdd-loop';
 import type { FailureCase } from './parse-report';
 
@@ -12,6 +17,10 @@ export interface RecordFixLogInput {
   failures: FailureCase[];
   /** Additional context or summary */
   summary?: string;
+  /** Data root for session/fix-log storage. Defaults to <cwd>/projects */
+  dataDir?: string;
+  /** Unified execution context */
+  context?: ExecutionContext;
 }
 
 export interface RecordFixLogResult {
@@ -21,11 +30,22 @@ export interface RecordFixLogResult {
   isNewFile: boolean;
 }
 
-const PROJECTS_ROOT = path.join(process.cwd(), 'projects');
 const SESSIONS_DIR = 'sessions';
 
-function getFixLogPath(projectName: string): string {
-  return path.join(PROJECTS_ROOT, projectName, SESSIONS_DIR, 'fix-log.md');
+interface FixLogPathOptions {
+  dataDir?: string;
+  context?: ExecutionContext;
+}
+
+function resolveDataRoot(options?: FixLogPathOptions): string {
+  const context = withExecutionContext(options?.context, {
+    dataDir: options?.dataDir ?? options?.context?.dataDir,
+  });
+  return resolveDataDir(context);
+}
+
+function getFixLogPath(projectName: string, options?: FixLogPathOptions): string {
+  return path.join(resolveDataRoot(options), projectName, SESSIONS_DIR, 'fix-log.md');
 }
 
 function toDateStamp(date: Date): string {
@@ -42,8 +62,8 @@ function toTimeStammp(date: Date): string {
  * The fix log file is written by code at runtime and should not be prefilled.
  */
 export async function recordFixLog(input: RecordFixLogInput): Promise<RecordFixLogResult> {
-  const { projectName, tddLogs, failures, summary } = input;
-  const logPath = getFixLogPath(projectName);
+  const { projectName, tddLogs, failures, summary, dataDir, context } = input;
+  const logPath = getFixLogPath(projectName, { dataDir, context });
   const logDir = path.dirname(logPath);
 
   await mkdir(logDir, { recursive: true });
@@ -143,7 +163,10 @@ function buildLogEntry(
   lines.push(`- Total attempts: ${totalAttempts}`);
   lines.push(`- Successful: ${successfulAttempts}`);
   lines.push(`- Failed: ${failedAttempts}`);
-  lines.push(`- Success rate: ${Math.round((successfulAttempts / totalAttempts) * 100)}%`);
+  const successRate = totalAttempts > 0
+    ? Math.round((successfulAttempts / totalAttempts) * 100)
+    : 0;
+  lines.push(`- Success rate: ${successRate}%`);
   lines.push('');
 
   // Add separator for next entry

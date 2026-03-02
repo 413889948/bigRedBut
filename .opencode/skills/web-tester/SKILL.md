@@ -21,6 +21,8 @@ Web 测试技能提供两种模式的端到端测试工作流：
 - 读取 `projects/<projectName>/knowledge/*` 了解项目背景
 - 检查是否存在现有测试和配置
 - 识别被测试的应用程序结构
+- 若提供 `projectDir`，在该目录下扫描与执行测试
+- 推荐统一传入 `context`：`{ projectDir, dataDir, cwd }`
 
 ### 2. 分解测试任务
 - 快速扫描代码库，绘制功能地图
@@ -36,6 +38,7 @@ Web 测试技能提供两种模式的端到端测试工作流：
 - **始终首先加载现有检查点**（如果存在）
 - 每完成一个任务后保存检查点
 - 检查点路径：`projects/<projectName>/sessions/checkpoints/`
+- 多项目隔离可通过 `dataDir` 指定独立数据根目录
 
 ### 5. 生成报告
 - 测试报告路径选项：
@@ -184,8 +187,10 @@ Web 测试技能提供两种模式的端到端测试工作流：
 # test-only 模式
 使用 web-tester 技能，模式：test-only
 项目：<projectName>
+项目目录：<projectDir，可选>
 
 # test-and-fix 模式
 使用 web-tester 技能，模式：test-and-fix
 项目：<projectName>
+项目目录：<projectDir，可选>
 ```

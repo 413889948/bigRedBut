@@ -1,5 +1,11 @@
 import { spawn } from 'node:child_process';
+import { mkdir, unlink } from 'node:fs/promises';
 import * as path from 'node:path';
+import {
+  resolveProjectDir,
+  withExecutionContext,
+  type ExecutionContext,
+} from '../execution-context';
 import type { FailureCase } from './parse-report';
 
 export interface VerifyFixesInput {
@@ -9,8 +15,12 @@ export interface VerifyFixesInput {
   testFiles?: string[];
   /** Project name for knowledge file paths */
   projectName?: string;
+  /** Unified execution context */
+  context?: ExecutionContext;
   /** Working directory for running tests */
   cwd?: string;
+  /** Alias of cwd for external project directory */
+  projectDir?: string;
 }
 
 export interface VerifyFixesResult {
@@ -29,9 +39,22 @@ export interface VerifyFixesResult {
  * - A provided list of test files
  */
 export async function verifyFixes(input: VerifyFixesInput): Promise<VerifyFixesResult> {
-  const cwd = input.cwd ?? process.cwd();
+  const context = withExecutionContext(input.context, {
+    projectDir: input.projectDir ?? input.context?.projectDir,
+    cwd: input.cwd ?? input.context?.cwd,
+  });
+  const cwd = resolveProjectDir(context);
   const reportDir = path.join(cwd, 'playwright-report');
-  const reportPath = input.reportPath ?? path.join(reportDir, 'report.json');
+  const rawReportPath = input.reportPath ?? path.join(reportDir, 'report.json');
+  const reportPath = path.isAbsolute(rawReportPath)
+    ? rawReportPath
+    : path.resolve(cwd, rawReportPath);
+  await mkdir(path.dirname(reportPath), { recursive: true });
+  try {
+    await unlink(reportPath);
+  } catch {
+    // no-op: report file may not exist yet
+  }
 
   // Build command arguments
   const args: string[] = ['playwright', 'test'];
@@ -42,7 +65,7 @@ export async function verifyFixes(input: VerifyFixesInput): Promise<VerifyFixesR
     args.push(...normalizedFiles);
   } else if (input.reportPath) {
     // Try to extract failing test files from previous report
-    const filesFromReport = await extractFailingTestFiles(input.reportPath);
+    const filesFromReport = await extractFailingTestFiles(reportPath);
     if (filesFromReport.length > 0) {
       args.push(...filesFromReport);
     }
@@ -58,7 +81,8 @@ export async function verifyFixes(input: VerifyFixesInput): Promise<VerifyFixesR
     const child = spawn('npx', args, {
       cwd,
       stdio: ['ignore', 'pipe', 'pipe'],
-      env: { ...process.env, CI: '1' },
+      env: { ...process.env, PLAYWRIGHT_JSON_OUTPUT_FILE: reportPath },
+      shell: process.platform === 'win32',
     });
 
     let stdout = '';

@@ -1,5 +1,10 @@
 import { appendFile, mkdir, readFile } from 'node:fs/promises';
 import path from 'node:path';
+import {
+  resolveDataDir,
+  withExecutionContext,
+  type ExecutionContext,
+} from '../execution-context';
 import type { CheckpointData } from '../checkpoint-validator';
 import type { TestTask } from './tasks';
 
@@ -15,9 +20,23 @@ export interface RecordDiscoveryInput {
   checkpoint: CheckpointData;
   discoveredTasks: TestTask[];
   notes: DiscoveryNote[];
+  /** Data root for knowledge/checkpoint storage. Defaults to <cwd>/projects */
+  dataDir?: string;
+  /** Unified execution context */
+  context?: ExecutionContext;
 }
 
-const PROJECTS_ROOT = path.join(process.cwd(), 'projects');
+interface KnowledgePathOptions {
+  dataDir?: string;
+  context?: ExecutionContext;
+}
+
+function resolveDataRoot(options?: KnowledgePathOptions): string {
+  const context = withExecutionContext(options?.context, {
+    dataDir: options?.dataDir ?? options?.context?.dataDir,
+  });
+  return resolveDataDir(context);
+}
 
 const KNOWLEDGE_FILE_BY_CATEGORY: Record<KnowledgeCategory, string> = {
   'tech-stack': 'tech-stack.md',
@@ -25,8 +44,12 @@ const KNOWLEDGE_FILE_BY_CATEGORY: Record<KnowledgeCategory, string> = {
   'test-guide': 'test-guide.md'
 };
 
-function getKnowledgeFilePath(projectName: string, category: KnowledgeCategory): string {
-  return path.join(PROJECTS_ROOT, projectName, 'knowledge', KNOWLEDGE_FILE_BY_CATEGORY[category]);
+function getKnowledgeFilePath(
+  projectName: string,
+  category: KnowledgeCategory,
+  options?: KnowledgePathOptions,
+): string {
+  return path.join(resolveDataRoot(options), projectName, 'knowledge', KNOWLEDGE_FILE_BY_CATEGORY[category]);
 }
 
 function toDateStamp(date: Date): string {
@@ -44,9 +67,10 @@ function toBulletLines(note: string): string[] {
 export async function appendKnowledgeNote(
   projectName: string,
   category: KnowledgeCategory,
-  note: string
+  note: string,
+  options?: KnowledgePathOptions,
 ): Promise<string> {
-  const knowledgePath = getKnowledgeFilePath(projectName, category);
+  const knowledgePath = getKnowledgeFilePath(projectName, category, options);
   const knowledgeDir = path.dirname(knowledgePath);
 
   await mkdir(knowledgeDir, { recursive: true });
@@ -97,13 +121,13 @@ function mergeDiscoveredCheckpointTasks(
 }
 
 export async function recordDiscovery(input: RecordDiscoveryInput): Promise<CheckpointData> {
-  const { projectName, checkpoint, discoveredTasks, notes } = input;
+  const { projectName, checkpoint, discoveredTasks, notes, dataDir, context } = input;
 
   const existingTasks = checkpoint.tester.discoveredNewTasks ?? [];
   checkpoint.tester.discoveredNewTasks = mergeDiscoveredCheckpointTasks(existingTasks, discoveredTasks);
 
   for (const note of notes) {
-    await appendKnowledgeNote(projectName, note.category, note.note);
+    await appendKnowledgeNote(projectName, note.category, note.note, { dataDir, context });
   }
 
   return checkpoint;

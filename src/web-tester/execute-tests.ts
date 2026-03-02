@@ -1,11 +1,23 @@
 import { spawn } from 'node:child_process';
-import { readFile } from 'node:fs/promises';
+import { mkdir, readFile } from 'node:fs/promises';
+import * as path from 'node:path';
+import {
+  resolveProjectDir,
+  withExecutionContext,
+  type ExecutionContext,
+} from '../execution-context';
 
 export interface ExecuteTestsOptions {
   testFiles: string[];
   baseURL?: string;
   reporterJsonPath?: string;
   timeoutMs?: number;
+  /** Unified execution context */
+  context?: ExecutionContext;
+  /** Working directory to run Playwright in */
+  cwd?: string;
+  /** Alias of cwd for external project directory */
+  projectDir?: string;
 }
 
 export interface ExecuteTestsResult {
@@ -18,6 +30,20 @@ export interface ExecuteTestsResult {
 
 export async function executeTests(options: ExecuteTestsOptions): Promise<ExecuteTestsResult> {
   const { testFiles, baseURL, reporterJsonPath, timeoutMs } = options;
+  const context = withExecutionContext(options.context, {
+    projectDir: options.projectDir ?? options.context?.projectDir,
+    cwd: options.cwd ?? options.context?.cwd,
+  });
+  const workingDir = resolveProjectDir(context);
+  const resolvedReportPath =
+    typeof reporterJsonPath === 'string' && reporterJsonPath.length > 0
+      ? (path.isAbsolute(reporterJsonPath)
+          ? reporterJsonPath
+          : path.resolve(workingDir, reporterJsonPath))
+      : undefined;
+  if (resolvedReportPath) {
+    await mkdir(path.dirname(resolvedReportPath), { recursive: true });
+  }
 
   const args = ['playwright', 'test', '--workers=1'];
   if (reporterJsonPath) {
@@ -29,12 +55,13 @@ export async function executeTests(options: ExecuteTestsOptions): Promise<Execut
   if (baseURL) {
     env.PLAYWRIGHT_TEST_BASE_URL = baseURL;
   }
-  if (reporterJsonPath) {
-    env.PLAYWRIGHT_JSON_OUTPUT_FILE = reporterJsonPath;
+  if (resolvedReportPath) {
+    env.PLAYWRIGHT_JSON_OUTPUT_FILE = resolvedReportPath;
   }
 
   const runResult = await new Promise<{ exitCode: number | null; stdout: string; stderr: string }>((resolve) => {
     const child = spawn('npx', args, {
+      cwd: workingDir,
       env,
       stdio: ['ignore', 'pipe', 'pipe'],
       shell: process.platform === 'win32'
@@ -85,9 +112,9 @@ export async function executeTests(options: ExecuteTestsOptions): Promise<Execut
   });
 
   let json: unknown;
-  if (reporterJsonPath) {
+  if (resolvedReportPath) {
     try {
-      const rawJson = await readFile(reporterJsonPath, 'utf8');
+      const rawJson = await readFile(resolvedReportPath, 'utf8');
       json = JSON.parse(rawJson);
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);

@@ -1,15 +1,32 @@
 import * as fs from 'node:fs';
 import * as path from 'node:path';
+import {
+  resolveDataDir,
+  withExecutionContext,
+  type ExecutionContext,
+} from './execution-context';
 import { validateCheckpoint, migrateCheckpoint, type CheckpointData } from './checkpoint-validator';
 
-const CHECKPOINT_BASE_DIR = path.join(process.cwd(), 'projects');
+export interface CheckpointPathOptions {
+  /** Data root for project/session/checkpoint storage. Defaults to <cwd>/projects */
+  dataDir?: string;
+  /** Unified execution context */
+  context?: ExecutionContext;
+}
+
+function resolveDataRoot(options?: CheckpointPathOptions): string {
+  const context = withExecutionContext(options?.context, {
+    dataDir: options?.dataDir ?? options?.context?.dataDir,
+  });
+  return resolveDataDir(context);
+}
 
 /**
  * Get the checkpoint file path for a given project and session
  */
-function getCheckpointPath(projectName: string, sessionId: string): string {
+function getCheckpointPath(projectName: string, sessionId: string, options?: CheckpointPathOptions): string {
   return path.join(
-    CHECKPOINT_BASE_DIR,
+    resolveDataRoot(options),
     projectName,
     'sessions',
     'checkpoints',
@@ -32,10 +49,11 @@ export type LoadCheckpointResult = CheckpointData | null | { ok: false; errorTyp
 export async function saveCheckpoint(
   projectName: string,
   sessionId: string,
-  data: unknown
+  data: unknown,
+  options?: CheckpointPathOptions
 ): Promise<boolean> {
   try {
-    const checkpointPath = getCheckpointPath(projectName, sessionId);
+    const checkpointPath = getCheckpointPath(projectName, sessionId, options);
     const dirPath = path.dirname(checkpointPath);
     const tmpPath = path.join(dirPath, `.${sessionId}.tmp`);
 
@@ -63,10 +81,11 @@ export async function saveCheckpoint(
  */
 export async function loadCheckpoint(
   projectName: string,
-  sessionId: string
+  sessionId: string,
+  options?: CheckpointPathOptions
 ): Promise<LoadCheckpointResult> {
   try {
-    const checkpointPath = getCheckpointPath(projectName, sessionId);
+    const checkpointPath = getCheckpointPath(projectName, sessionId, options);
 
     // Check if file exists
     try {
@@ -124,10 +143,11 @@ export async function loadCheckpoint(
  */
 export async function deleteCheckpoint(
   projectName: string,
-  sessionId: string
+  sessionId: string,
+  options?: CheckpointPathOptions
 ): Promise<boolean> {
   try {
-    const checkpointPath = getCheckpointPath(projectName, sessionId);
+    const checkpointPath = getCheckpointPath(projectName, sessionId, options);
 
     // Check if file exists
     try {

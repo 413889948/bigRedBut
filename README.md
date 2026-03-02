@@ -90,6 +90,11 @@ npx playwright test tests/e2e/example.spec.ts --reporter=list
 Create `.env` from `.env.example` and set:
 - `PLAYWRIGHT_TEST_BASE_URL`
 - `PLAYWRIGHT_BROWSERS_PATH=0`
+- `PROJECT_DIR` (default code project directory)
+- `DATA_DIR` (default isolated data root)
+
+Context resolution priority:
+- explicit function args (`context` / direct fields) > env (`PROJECT_DIR` / `DATA_DIR`) > built-in defaults
 
 ## 5) Typical Usage Flows
 
@@ -149,7 +154,7 @@ Key files:
 
 ### Example A: run test-only with JSON output
 ```bash
-npx -y tsx -e "import { executeTests } from './src/web-tester/execute-tests'; (async () => { const r = await executeTests({ testFiles: ['tests/e2e/example.spec.ts'], reporterJsonPath: 'test-results/example.json' }); console.log(JSON.stringify({ ok: r.ok, exitCode: r.exitCode }, null, 2)); })();"
+npx -y tsx -e "import { executeTests } from './src/web-tester/execute-tests'; (async () => { const r = await executeTests({ projectDir: 'D:/your-web-project', testFiles: ['tests/e2e/example.spec.ts'], reporterJsonPath: 'test-results/example.json' }); console.log(JSON.stringify({ ok: r.ok, exitCode: r.exitCode }, null, 2)); })();"
 ```
 
 ### Example B: create OpenSpec change and scaffold artifacts
@@ -164,11 +169,28 @@ openspec-cn status --change my-session
 npx -y tsx -e "import { saveCheckpoint, loadCheckpoint } from './src/checkpoint'; (async () => { await saveCheckpoint('template', 'demo-session', { version: '1.0.0', sessionId: 'demo-session', mode: 'test-only', lastUpdated: new Date().toISOString(), tester: { completedTasks: [] }, developer: { completedFixes: [] }, knowledge: { techStack: [], gotchas: [], testNotes: [] } }); const cp = await loadCheckpoint('template', 'demo-session'); console.log(cp ? 'loaded' : 'missing'); })();"
 ```
 
+### Example D: verify fixes inside target project directory
+```bash
+npx -y tsx -e "import { verifyFixes } from './src/web-developer/verify-fixes'; (async () => { const r = await verifyFixes({ projectDir: 'D:/your-web-project', testFiles: ['tests/e2e/example.spec.ts'], reportPath: 'test-results/verify.json' }); console.log(JSON.stringify({ ok: r.ok, remaining: r.remainingFailures.length }, null, 2)); })();"
+```
+
 ## 8) Configuration Files
 
 - `playwright.config.ts`
   - Core Playwright settings: `testDir`, `workers`, `retries`, `timeout`, `outputDir`, `baseURL`, `projects`.
   - `baseURL` defaults to `about:blank` if `PLAYWRIGHT_TEST_BASE_URL` is not set.
+
+- Runtime path options in code (for external project repair)
+  - Unified context object: `context: { projectDir, dataDir, cwd }`
+  - `executeTests({ context, ... })`
+  - `verifyFixes({ context, ... })`
+  - `applyFixForFailure({ context, ... })`
+  - Multi-project data isolation: `dataDir` for checkpoints/sessions/knowledge/fix-log
+    - `saveCheckpoint(..., { context: { dataDir } })`
+    - `createSession(..., { context: { dataDir } })`
+    - `updateKnowledge({ ..., context: { dataDir } })`
+    - `recordFixLog({ ..., context: { dataDir } })`
+  - If omitted, modules fall back to current process directory.
 
 - `.env.example`
   - Environment variable template.

@@ -1,5 +1,10 @@
 import { appendFile, mkdir, readFile } from 'node:fs/promises';
 import * as path from 'node:path';
+import {
+  resolveDataDir,
+  withExecutionContext,
+  type ExecutionContext,
+} from '../execution-context';
 import type { TddAttemptLog } from './tdd-loop';
 import type { FailureCase } from './parse-report';
 
@@ -12,6 +17,10 @@ export interface UpdateKnowledgeInput {
   tddLogs: TddAttemptLog[];
   /** Categories to update */
   categories?: KnowledgeCategory[];
+  /** Data root for knowledge storage. Defaults to <cwd>/projects */
+  dataDir?: string;
+  /** Unified execution context */
+  context?: ExecutionContext;
 }
 
 export interface UpdateKnowledgeResult {
@@ -26,15 +35,29 @@ interface KnowledgeNote {
   content: string;
 }
 
-const PROJECTS_ROOT = path.join(process.cwd(), 'projects');
+interface KnowledgePathOptions {
+  dataDir?: string;
+  context?: ExecutionContext;
+}
+
+function resolveDataRoot(options?: KnowledgePathOptions): string {
+  const context = withExecutionContext(options?.context, {
+    dataDir: options?.dataDir ?? options?.context?.dataDir,
+  });
+  return resolveDataDir(context);
+}
 
 const KNOWLEDGE_FILE_BY_CATEGORY: Record<KnowledgeCategory, string> = {
   gotchas: 'gotchas.md',
   'test-guide': 'test-guide.md',
 };
 
-function getKnowledgeFilePath(projectName: string, category: KnowledgeCategory): string {
-  return path.join(PROJECTS_ROOT, projectName, 'knowledge', KNOWLEDGE_FILE_BY_CATEGORY[category]);
+function getKnowledgeFilePath(
+  projectName: string,
+  category: KnowledgeCategory,
+  options?: KnowledgePathOptions,
+): string {
+  return path.join(resolveDataRoot(options), projectName, 'knowledge', KNOWLEDGE_FILE_BY_CATEGORY[category]);
 }
 
 function toDateStamp(date: Date): string {
@@ -56,9 +79,10 @@ function toBulletLines(note: string): string[] {
 export async function appendKnowledgeNote(
   projectName: string,
   category: KnowledgeCategory,
-  note: string
+  note: string,
+  options?: KnowledgePathOptions,
 ): Promise<string> {
-  const knowledgePath = getKnowledgeFilePath(projectName, category);
+  const knowledgePath = getKnowledgeFilePath(projectName, category, options);
   const knowledgeDir = path.dirname(knowledgePath);
 
   await mkdir(knowledgeDir, { recursive: true });
@@ -91,7 +115,7 @@ export async function appendKnowledgeNote(
  * Appends findings to project knowledge files (append-only).
  */
 export async function updateKnowledge(input: UpdateKnowledgeInput): Promise<UpdateKnowledgeResult> {
-  const { projectName, tddLogs, categories = ['gotchas', 'test-guide'] } = input;
+  const { projectName, tddLogs, categories = ['gotchas', 'test-guide'], dataDir, context } = input;
   const updatedFiles: string[] = [];
   const notes: KnowledgeNote[] = [];
 
@@ -99,7 +123,7 @@ export async function updateKnowledge(input: UpdateKnowledgeInput): Promise<Upda
   const gotchaNotes = extractGotchas(tddLogs);
   if (gotchaNotes.length > 0 && categories.includes('gotchas')) {
     const joinedNote = gotchaNotes.join('\n');
-    const filePath = await appendKnowledgeNote(projectName, 'gotchas', joinedNote);
+    const filePath = await appendKnowledgeNote(projectName, 'gotchas', joinedNote, { dataDir, context });
     updatedFiles.push(filePath);
     notes.push({ category: 'gotchas', content: joinedNote });
   }
@@ -108,7 +132,7 @@ export async function updateKnowledge(input: UpdateKnowledgeInput): Promise<Upda
   const testGuideNotes = extractTestGuide(tddLogs);
   if (testGuideNotes.length > 0 && categories.includes('test-guide')) {
     const joinedNote = testGuideNotes.join('\n');
-    const filePath = await appendKnowledgeNote(projectName, 'test-guide', joinedNote);
+    const filePath = await appendKnowledgeNote(projectName, 'test-guide', joinedNote, { dataDir, context });
     updatedFiles.push(filePath);
     notes.push({ category: 'test-guide', content: joinedNote });
   }

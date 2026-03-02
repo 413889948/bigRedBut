@@ -1,8 +1,28 @@
 import * as fs from 'node:fs';
 import * as path from 'node:path';
-import { saveCheckpoint, loadCheckpoint, type LoadCheckpointResult } from './checkpoint';
+import {
+  resolveDataDir,
+  withExecutionContext,
+  type ExecutionContext,
+} from './execution-context';
+import {
+  saveCheckpoint,
+  loadCheckpoint,
+  type LoadCheckpointResult,
+  type CheckpointPathOptions,
+} from './checkpoint';
 
-const SESSIONS_BASE_DIR = path.join(process.cwd(), 'projects');
+export interface SessionPathOptions extends CheckpointPathOptions {
+  /** Unified execution context */
+  context?: ExecutionContext;
+}
+
+function resolveDataRoot(options?: SessionPathOptions): string {
+  const context = withExecutionContext(options?.context, {
+    dataDir: options?.dataDir ?? options?.context?.dataDir,
+  });
+  return resolveDataDir(context);
+}
 
 /**
  * Generate a deterministic session ID using timestamp and random suffix
@@ -16,22 +36,22 @@ function generateSessionId(): string {
 /**
  * Get the session log file path
  */
-function getLogPath(projectName: string, sessionId: string): string {
-  return path.join(SESSIONS_BASE_DIR, projectName, 'sessions', `${sessionId}.log`);
+function getLogPath(projectName: string, sessionId: string, options?: SessionPathOptions): string {
+  return path.join(resolveDataRoot(options), projectName, 'sessions', `${sessionId}.log`);
 }
 
 /**
  * Get the sessions directory path
  */
-function getSessionsDir(projectName: string): string {
-  return path.join(SESSIONS_BASE_DIR, projectName, 'sessions');
+function getSessionsDir(projectName: string, options?: SessionPathOptions): string {
+  return path.join(resolveDataRoot(options), projectName, 'sessions');
 }
 
 /**
  * Get the checkpoints directory path
  */
-function getCheckpointsDir(projectName: string): string {
-  return path.join(SESSIONS_BASE_DIR, projectName, 'sessions', 'checkpoints');
+function getCheckpointsDir(projectName: string, options?: SessionPathOptions): string {
+  return path.join(resolveDataRoot(options), projectName, 'sessions', 'checkpoints');
 }
 
 /**
@@ -41,9 +61,10 @@ async function appendLog(
   projectName: string,
   sessionId: string,
   operation: string,
-  details?: string
+  details?: string,
+  options?: SessionPathOptions
 ): Promise<void> {
-  const logPath = getLogPath(projectName, sessionId);
+  const logPath = getLogPath(projectName, sessionId, options);
   const dirPath = path.dirname(logPath);
 
   // Ensure directory exists
@@ -58,8 +79,8 @@ async function appendLog(
 /**
  * Read all log entries from a session log file
  */
-async function readLog(projectName: string, sessionId: string): Promise<string[]> {
-  const logPath = getLogPath(projectName, sessionId);
+async function readLog(projectName: string, sessionId: string, options?: SessionPathOptions): Promise<string[]> {
+  const logPath = getLogPath(projectName, sessionId, options);
 
   try {
     await fs.promises.access(logPath);
@@ -79,7 +100,8 @@ async function readLog(projectName: string, sessionId: string): Promise<string[]
  */
 export async function createSession(
   projectName: string,
-  mode: 'test-only' | 'test-and-fix'
+  mode: 'test-only' | 'test-and-fix',
+  options?: SessionPathOptions
 ): Promise<string | null> {
   try {
     const sessionId = generateSessionId();
@@ -106,7 +128,7 @@ export async function createSession(
     };
 
     // Save initial checkpoint
-    const saved = await saveCheckpoint(projectName, sessionId, initialData);
+    const saved = await saveCheckpoint(projectName, sessionId, initialData, options);
     if (!saved) {
       return null;
     }
@@ -116,7 +138,8 @@ export async function createSession(
       projectName,
       sessionId,
       'CREATE',
-      `mode=${mode}, version=1.0.0`
+      `mode=${mode}, version=1.0.0`,
+      options
     );
 
     return sessionId;
@@ -134,19 +157,20 @@ export async function createSession(
  */
 export async function resumeSession(
   projectName: string,
-  sessionId: string
+  sessionId: string,
+  options?: SessionPathOptions
 ): Promise<LoadCheckpointResult> {
   try {
-    const data = await loadCheckpoint(projectName, sessionId);
+    const data = await loadCheckpoint(projectName, sessionId, options);
 
     if (data !== null && typeof data === 'object' && 'ok' in data && !data.ok) {
       // Validation or parse error - log and return
-      await appendLog(projectName, sessionId, 'RESUME_FAILED', `errorType=${data.errorType}`);
+      await appendLog(projectName, sessionId, 'RESUME_FAILED', `errorType=${data.errorType}`, options);
       return data;
     }
 
     if (data !== null) {
-      await appendLog(projectName, sessionId, 'RESUME');
+      await appendLog(projectName, sessionId, 'RESUME', undefined, options);
     }
 
     return data;
@@ -166,7 +190,8 @@ export async function resumeSession(
 export async function closeSession(
   projectName: string,
   sessionId: string,
-  finalData: unknown
+  finalData: unknown,
+  options?: SessionPathOptions
 ): Promise<boolean> {
   try {
     // Update lastUpdated timestamp
@@ -175,10 +200,10 @@ export async function closeSession(
         ? { ...finalData, lastUpdated: new Date().toISOString() }
         : finalData;
 
-    const saved = await saveCheckpoint(projectName, sessionId, dataWithTimestamp);
+    const saved = await saveCheckpoint(projectName, sessionId, dataWithTimestamp, options);
 
     if (saved) {
-      await appendLog(projectName, sessionId, 'CLOSE', 'final checkpoint saved');
+      await appendLog(projectName, sessionId, 'CLOSE', 'final checkpoint saved', options);
     }
 
     return saved;
@@ -193,9 +218,9 @@ export async function closeSession(
  * @param projectName - Name of the project
  * @returns Array of session IDs
  */
-export async function listSessions(projectName: string): Promise<string[]> {
+export async function listSessions(projectName: string, options?: SessionPathOptions): Promise<string[]> {
   try {
-    const checkpointsDir = getCheckpointsDir(projectName);
+    const checkpointsDir = getCheckpointsDir(projectName, options);
 
     // Check if directory exists
     try {
@@ -231,7 +256,8 @@ export async function listSessions(projectName: string): Promise<string[]> {
  */
 export async function getSessionLog(
   projectName: string,
-  sessionId: string
+  sessionId: string,
+  options?: SessionPathOptions
 ): Promise<string[]> {
-  return readLog(projectName, sessionId);
+  return readLog(projectName, sessionId, options);
 }

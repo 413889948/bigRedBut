@@ -85,6 +85,11 @@ npx playwright test tests/e2e/example.spec.ts --reporter=list
 从 `.env.example` 创建 `.env`，并按需设置：
 - `PLAYWRIGHT_TEST_BASE_URL`
 - `PLAYWRIGHT_BROWSERS_PATH=0`
+- `PROJECT_DIR`（默认代码项目目录）
+- `DATA_DIR`（默认隔离数据根目录）
+
+上下文解析优先级：
+- 显式函数参数（`context` / 直接字段）> 环境变量（`PROJECT_DIR` / `DATA_DIR`）> 内置默认值
 
 ## 5) 典型使用流程
 
@@ -143,7 +148,7 @@ npx playwright test tests/e2e/example.spec.ts --reporter=list
 
 ### 示例 A：test-only 执行并输出 JSON
 ```bash
-npx -y tsx -e "import { executeTests } from './src/web-tester/execute-tests'; (async () => { const r = await executeTests({ testFiles: ['tests/e2e/example.spec.ts'], reporterJsonPath: 'test-results/example.json' }); console.log(JSON.stringify({ ok: r.ok, exitCode: r.exitCode }, null, 2)); })();"
+npx -y tsx -e "import { executeTests } from './src/web-tester/execute-tests'; (async () => { const r = await executeTests({ projectDir: 'D:/your-web-project', testFiles: ['tests/e2e/example.spec.ts'], reporterJsonPath: 'test-results/example.json' }); console.log(JSON.stringify({ ok: r.ok, exitCode: r.exitCode }, null, 2)); })();"
 ```
 
 ### 示例 B：创建 OpenSpec 变更并同步产物
@@ -158,11 +163,28 @@ openspec-cn status --change my-session
 npx -y tsx -e "import { saveCheckpoint, loadCheckpoint } from './src/checkpoint'; (async () => { await saveCheckpoint('template', 'demo-session', { version: '1.0.0', sessionId: 'demo-session', mode: 'test-only', lastUpdated: new Date().toISOString(), tester: { completedTasks: [] }, developer: { completedFixes: [] }, knowledge: { techStack: [], gotchas: [], testNotes: [] } }); const cp = await loadCheckpoint('template', 'demo-session'); console.log(cp ? 'loaded' : 'missing'); })();"
 ```
 
+### 示例 D：在目标项目目录中执行修复验证
+```bash
+npx -y tsx -e "import { verifyFixes } from './src/web-developer/verify-fixes'; (async () => { const r = await verifyFixes({ projectDir: 'D:/your-web-project', testFiles: ['tests/e2e/example.spec.ts'], reportPath: 'test-results/verify.json' }); console.log(JSON.stringify({ ok: r.ok, remaining: r.remainingFailures.length }, null, 2)); })();"
+```
+
 ## 8) 配置文件说明
 
 - `playwright.config.ts`
   - Playwright 核心配置：`testDir`、`workers`、`retries`、`timeout`、`outputDir`、`baseURL`、`projects`。
   - 若未设置 `PLAYWRIGHT_TEST_BASE_URL`，默认使用 `about:blank`。
+
+- 运行时目录配置（支持外部项目修复）
+  - 统一上下文对象：`context: { projectDir, dataDir, cwd }`
+  - `executeTests({ context, ... })`
+  - `verifyFixes({ context, ... })`
+  - `applyFixForFailure({ context, ... })`
+  - 多项目数据隔离：`dataDir` 用于 checkpoint/session/knowledge/fix-log
+    - `saveCheckpoint(..., { context: { dataDir } })`
+    - `createSession(..., { context: { dataDir } })`
+    - `updateKnowledge({ ..., context: { dataDir } })`
+    - `recordFixLog({ ..., context: { dataDir } })`
+  - 未提供时，默认使用当前进程目录。
 
 - `.env.example`
   - 环境变量模板。

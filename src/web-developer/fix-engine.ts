@@ -1,11 +1,20 @@
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 
+import {
+  resolveProjectDir,
+  withExecutionContext,
+  type ExecutionContext,
+} from '../execution-context';
 import type { FailureCase } from './parse-report';
 
 export interface ApplyFixForFailureInput {
   failure: FailureCase;
   attempt: number;
+  /** Unified execution context */
+  context?: ExecutionContext;
+  /** External project directory where code should be fixed */
+  projectDir?: string;
 }
 
 export interface ApplyFixForFailureResult {
@@ -18,13 +27,20 @@ export interface ApplyFixForFailureResult {
 export async function applyFixForFailure({
   failure,
   attempt: _attempt,
+  context,
+  projectDir,
 }: ApplyFixForFailureInput): Promise<ApplyFixForFailureResult> {
-  const relaxedTitleResult = tryRelaxGeneratedSpecTitleExpectation(failure);
+  const executionContext = withExecutionContext(context, {
+    projectDir: projectDir ?? context?.projectDir,
+    cwd: context?.cwd,
+  });
+
+  const relaxedTitleResult = tryRelaxGeneratedSpecTitleExpectation(failure, executionContext);
   if (relaxedTitleResult) {
     return relaxedTitleResult;
   }
 
-  const importFixResult = tryFixRelativeJsImportsInSourceFiles(failure);
+  const importFixResult = tryFixRelativeJsImportsInSourceFiles(failure, executionContext);
   if (importFixResult) {
     return importFixResult;
   }
@@ -37,12 +53,13 @@ export async function applyFixForFailure({
 
 function tryRelaxGeneratedSpecTitleExpectation(
   failure: FailureCase,
+  context?: ExecutionContext,
 ): ApplyFixForFailureResult | null {
   if (!looksTitleRelated(failure)) {
     return null;
   }
 
-  const filePath = resolveFailureFilePath(failure.file);
+  const filePath = resolveFailureFilePath(failure.file, context);
   if (!isUnderGeneratedSpecs(filePath) || !fs.existsSync(filePath)) {
     return null;
   }
@@ -61,18 +78,20 @@ function tryRelaxGeneratedSpecTitleExpectation(
   return {
     ok: true,
     message: 'relaxed title expectation in generated spec',
-    changedFiles: [normalizeForReport(filePath)],
+    changedFiles: [normalizeForReport(filePath, context)],
   };
 }
 
 function tryFixRelativeJsImportsInSourceFiles(
   failure: FailureCase,
+  context?: ExecutionContext,
 ): ApplyFixForFailureResult | null {
   if (!looksImportRelated(failure)) {
     return null;
   }
 
-  const srcRoot = path.resolve('src');
+  const workspaceRoot = resolveProjectDir(context);
+  const srcRoot = path.resolve(workspaceRoot, 'src');
   if (!fs.existsSync(srcRoot)) {
     return null;
   }
@@ -95,7 +114,7 @@ function tryFixRelativeJsImportsInSourceFiles(
     }
 
     fs.writeFileSync(filePath, updated, 'utf-8');
-    changedFiles.push(normalizeForReport(filePath));
+    changedFiles.push(normalizeForReport(filePath, context));
   }
 
   if (changedFiles.length === 0) {
@@ -163,14 +182,16 @@ function isUnderGeneratedSpecs(filePath: string): boolean {
   return normalized.includes('/tests/e2e/generated/');
 }
 
-function resolveFailureFilePath(filePath: string): string {
+function resolveFailureFilePath(filePath: string, context?: ExecutionContext): string {
   if (path.isAbsolute(filePath)) {
     return filePath;
   }
 
-  return path.resolve('tests/e2e', filePath);
+  const workspaceRoot = resolveProjectDir(context);
+  return path.resolve(workspaceRoot, 'tests/e2e', filePath);
 }
 
-function normalizeForReport(filePath: string): string {
-  return path.relative(process.cwd(), filePath).split(path.sep).join('/');
+function normalizeForReport(filePath: string, context?: ExecutionContext): string {
+  const workspaceRoot = resolveProjectDir(context);
+  return path.relative(workspaceRoot, filePath).split(path.sep).join('/');
 }
