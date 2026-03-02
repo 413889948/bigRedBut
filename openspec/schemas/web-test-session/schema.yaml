@@ -1,0 +1,71 @@
+name: web-test-session
+version: 1
+description: Web 测试会话工作流 - 测试报告 → 修复日志 → 任务清单
+artifacts:
+  - id: test-report
+    generates: test-report.md
+    description: 测试会话的结果报告
+    template: test-report.md
+    instruction: |
+      创建测试会话的结果报告。
+
+      章节：
+      - **Session Info**: 测试会话的基本信息（时间、范围、目标）
+      - **Test Results**: 测试执行结果摘要
+      - **Issues Found**: 发现的问题列表
+      - **Summary**: 总体结论和下一步建议
+
+      保持简洁明了，专注于可操作的信息。
+    requires: []
+  - id: fix-log
+    generates: fix-log.md
+    description: 修复问题的工作日志
+    template: fix-log.md
+    instruction: |
+      记录测试中发现问题的修复过程。
+
+      章节：
+      - **Issues**: 要修复的问题列表
+      - **Fixes Applied**: 已应用的修复及其说明
+      - **Verification**: 如何验证修复有效
+      - **Remaining Work**: 尚未完成的工作
+
+      每个修复都应该可追溯回具体的问题。
+    requires:
+      - test-report
+  - id: tasks
+    generates: tasks.md
+    description: 待处理任务的清单
+    template: tasks.md
+    instruction: |
+      创建待处理任务的清单。
+
+      指南：
+      - 将相关任务分组到 ## 编号标题下
+      - 每个任务必须是复选框：`- [ ] X.Y 任务描述`
+      - 任务应该足够小，可以在一次会话中完成
+      - 按依赖关系排序任务
+
+      示例：
+      ```
+      ## 1. 紧急修复
+
+      - [ ] 1.1 修复登录按钮点击无响应问题
+      - [ ] 1.2 添加错误边界处理
+
+      ## 2. 改进项
+
+      - [ ] 2.1 优化加载状态显示
+      - [ ] 2.2 添加表单验证提示
+      ```
+
+      每个任务应该是可验证的——你能知道它何时完成。
+    requires:
+      - test-report
+      - fix-log
+apply:
+  requires:
+    - tasks
+  tracks: tasks.md
+  instruction: |
+    阅读上下文文件，逐个处理待办任务，并在完成后标记。如果遇到阻碍或需要澄清，请暂停。

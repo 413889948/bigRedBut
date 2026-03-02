@@ -1,0 +1,229 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "checkpoint-schema.json",
+  "title": "Web Testing Session Checkpoint",
+  "description": "Schema for checkpoint files that enable interruptible/resumable web testing sessions with tester and developer modes",
+  "type": "object",
+  "required": ["version", "sessionId", "mode", "lastUpdated", "tester", "developer", "knowledge"],
+  "properties": {
+    "version": {
+      "type": "string",
+      "description": "Schema version in semver format (e.g., '1.0.0'). Used for migration compatibility.",
+      "pattern": "^\\d+\\.\\d+\\.\\d+$",
+      "examples": ["1.0.0"]
+    },
+    "sessionId": {
+      "type": "string",
+      "description": "Unique identifier for this testing session",
+      "minLength": 1,
+      "examples": ["test-session-20260302-001"]
+    },
+    "mode": {
+      "type": "string",
+      "description": "Operating mode: test-only (execution only) or test-and-fix (TDD cycle)",
+      "enum": ["test-only", "test-and-fix"]
+    },
+    "lastUpdated": {
+      "type": "string",
+      "format": "date-time",
+      "description": "ISO 8601 timestamp of last checkpoint update",
+      "examples": ["2026-03-02T10:30:00Z"]
+    },
+    "tester": {
+      "type": "object",
+      "description": "State for the Web Tester skill",
+      "required": ["completedTasks"],
+      "properties": {
+        "completedTasks": {
+          "type": "array",
+          "description": "List of completed test tasks",
+          "items": {
+            "type": "object",
+            "required": ["taskId", "status"],
+            "properties": {
+              "taskId": {
+                "type": "string",
+                "description": "Unique task identifier"
+              },
+              "status": {
+                "type": "string",
+                "enum": ["passed", "failed", "skipped"],
+                "description": "Test execution result"
+              },
+              "testFile": {
+                "type": "string",
+                "description": "Path to the generated test file"
+              },
+              "executedAt": {
+                "type": "string",
+                "format": "date-time",
+                "description": "When the test was executed"
+              },
+              "failureDetails": {
+                "type": "string",
+                "description": "Error message if test failed"
+              }
+            }
+          }
+        },
+        "currentTask": {
+          "type": "string",
+          "description": "ID of the task currently being executed"
+        },
+        "currentStep": {
+          "type": "integer",
+          "description": "Current step number within the current task",
+          "minimum": 0
+        },
+        "totalSteps": {
+          "type": "integer",
+          "description": "Total number of steps in the current task",
+          "minimum": 1
+        },
+        "discoveredNewTasks": {
+          "type": "array",
+          "description": "New test tasks discovered during execution",
+          "items": {
+            "type": "object",
+            "required": ["taskId", "description"],
+            "properties": {
+              "taskId": { "type": "string" },
+              "description": { "type": "string" },
+              "priority": { "type": "string", "enum": ["high", "medium", "low"] },
+              "discoveredFrom": { "type": "string", "description": "Task ID that led to this discovery" }
+            }
+          }
+        },
+        "storageStatePath": {
+          "type": "string",
+          "description": "Path to Playwright storageState for auth persistence",
+          "examples": ["playwright/.auth/user.json"]
+        }
+      }
+    },
+    "developer": {
+      "type": "object",
+      "description": "State for the Web Developer skill (TDD fix cycle)",
+      "required": ["completedFixes"],
+      "properties": {
+        "completedFixes": {
+          "type": "array",
+          "description": "List of completed bug fixes",
+          "items": {
+            "type": "object",
+            "required": ["bugId", "status"],
+            "properties": {
+              "bugId": {
+                "type": "string",
+                "description": "Reference to the failing test/bug"
+              },
+              "status": {
+                "type": "string",
+                "enum": ["fixed", "unable-to-fix", "deferred"],
+                "description": "Resolution status"
+              },
+              "testFile": {
+                "type": "string",
+                "description": "Path to the test file that验证 the fix"
+              },
+              "fixedFiles": {
+                "type": "array",
+                "items": { "type": "string" },
+                "description": "List of source files modified"
+              },
+              "attempts": {
+                "type": "integer",
+                "description": "Number of TDD cycles attempted",
+                "minimum": 1
+              },
+              "completedAt": {
+                "type": "string",
+                "format": "date-time"
+              }
+            }
+          }
+        },
+        "currentFix": {
+          "type": "object",
+          "description": "Current bug fix in progress",
+          "required": ["bugId", "status", "attempts"],
+          "properties": {
+            "bugId": {
+              "type": "string",
+              "description": "Reference to the failing test/bug"
+            },
+            "status": {
+              "type": "string",
+              "enum": ["analyzing", "writing-test", "implementing-fix", "verifying"],
+              "description": "Current TDD phase"
+            },
+            "attempts": {
+              "type": "integer",
+              "description": "Number of TDD cycles attempted for this fix",
+              "minimum": 0
+            },
+            "testFile": {
+              "type": "string",
+              "description": "Path to the test file for this fix"
+            }
+          }
+        }
+      }
+    },
+    "knowledge": {
+      "type": "object",
+      "description": "Discovered knowledge about the project to avoid redundant token usage",
+      "required": ["techStack", "gotchas", "testNotes"],
+      "properties": {
+        "techStack": {
+          "type": "array",
+          "description": "Identified technologies and frameworks",
+          "items": {
+            "type": "object",
+            "required": ["name", "category"],
+            "properties": {
+              "name": { "type": "string" },
+              "category": { 
+                "type": "string",
+                "enum": ["frontend", "backend", "database", "testing", "infrastructure", "other"]
+              },
+              "version": { "type": "string" },
+              "notes": { "type": "string" }
+            }
+          }
+        },
+        "gotchas": {
+          "type": "array",
+          "description": "Known issues, quirks, or pitfalls discovered",
+          "items": {
+            "type": "object",
+            "required": ["title", "description"],
+            "properties": {
+              "title": { "type": "string" },
+              "description": { "type": "string" },
+              "workaround": { "type": "string" },
+              "severity": { "type": "string", "enum": ["critical", "major", "minor"] }
+            }
+          }
+        },
+        "testNotes": {
+          "type": "array",
+          "description": "Testing-specific insights and patterns",
+          "items": {
+            "type": "object",
+            "required": ["topic", "note"],
+            "properties": {
+              "topic": { "type": "string" },
+              "note": { "type": "string" },
+              "relatedTests": { 
+                "type": "array",
+                "items": { "type": "string" }
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  "additionalProperties": false
+}

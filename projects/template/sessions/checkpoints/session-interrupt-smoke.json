@@ -1,0 +1,39 @@
+{
+  "version": "1.0.0",
+  "sessionId": "session-interrupt-smoke",
+  "mode": "test-and-fix",
+  "lastUpdated": "2026-03-01T18:48:26.783Z",
+  "tester": {
+    "completedTasks": [
+      {
+        "taskId": "generated-route-title-check",
+        "status": "passed",
+        "testFile": "tests/e2e/generated/discovered.spec.ts",
+        "executedAt": "2026-03-01T18:48:26.783Z"
+      }
+    ],
+    "currentStep": 3,
+    "totalSteps": 3,
+    "discoveredNewTasks": [],
+    "storageStatePath": "playwright/.auth/user.json"
+  },
+  "developer": {
+    "completedFixes": [
+      {
+        "bugId": "route: about:blank",
+        "status": "fixed",
+        "testFile": "generated/discovered.spec.ts",
+        "fixedFiles": [
+          "tests/e2e/generated/discovered.spec.ts"
+        ],
+        "attempts": 1,
+        "completedAt": "2026-03-01T18:48:26.783Z"
+      }
+    ]
+  },
+  "knowledge": {
+    "techStack": [],
+    "gotchas": [],
+    "testNotes": []
+  }
+}

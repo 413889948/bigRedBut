@@ -1,0 +1,19 @@
+# Playwright test artifacts
+test-results/
+playwright-report/
+
+# Node modules
+node_modules/
+
+# General
+.DS_Store
+*.log
+.env
+nul
+
+
+# Playwright auth storage (security: never commit storage state)
+playwright/.auth/
+
+# Session checkpoints (project-specific, regenerated)
+projects/*/sessions/*.json
