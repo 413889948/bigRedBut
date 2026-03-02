@@ -17,3 +17,11 @@ playwright/.auth/
 
 # Session checkpoints (project-specific, regenerated)
 projects/*/sessions/*.json
+projects/*/sessions/checkpoints/*.json
+projects/*/sessions/*.log
+projects/*/sessions/fix-log.md
+projects/*/sessions/*-loop.json
+projects/*/sessions/*.tmp.json
+
+# Local planning/workflow artifacts
+.sisyphus/
