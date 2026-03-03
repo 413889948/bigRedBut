@@ -25,3 +25,8 @@ projects/*/sessions/*.tmp.json
 
 # Local planning/workflow artifacts
 .sisyphus/
+.idea/vcs.xml
+.idea/modules.xml
+.idea/misc.xml
+.idea/bigRedBut.iml
+.idea/.gitignore

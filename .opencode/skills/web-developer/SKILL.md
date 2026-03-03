@@ -12,6 +12,18 @@ metadata:
 
 Web 开发技能提供 TDD 驱动的代码修复工作流，专注于根据失败的测试报告自动修复代码问题。
 
+## Runtime 布局（可迁移）
+
+- 技能本地实现：`.opencode/skills/web-developer/src/`
+- 共享核心依赖：`.opencode/skills/_skill-core/src/`
+
+迁移到其他项目时，最小复制集合：
+- `.opencode/skills/_skill-core/`
+- `.opencode/skills/web-developer/`
+
+若需要 test-and-fix 联动，还应复制：
+- `.opencode/skills/web-tester/`
+
 **核心原则**：
 1. 测试优先 - 始终先写/更新测试（RED），再实现修复（GREEN）
 2. 迭代限制 - 每个 failing case 最多 3 次尝试，超过则标记为无法修复

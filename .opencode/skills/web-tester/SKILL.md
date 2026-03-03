@@ -15,6 +15,17 @@ Web 测试技能提供两种模式的端到端测试工作流：
 1. **test-only** - 仅执行测试，报告结果
 2. **test-and-fix** - 执行测试，自动修复失败，保存进度
 
+## Runtime 布局（可迁移）
+
+- 技能本地实现：`.opencode/skills/web-tester/src/`
+- 共享核心依赖：`.opencode/skills/_skill-core/src/`
+- 与修复技能协作：`.opencode/skills/web-developer/src/`
+
+迁移到其他项目时，最小复制集合：
+- `.opencode/skills/_skill-core/`
+- `.opencode/skills/web-tester/`
+- `.opencode/skills/web-developer/`（仅当使用 test-and-fix）
+
 ## 核心工作流
 
 ### 1. 浏览项目
@@ -211,25 +222,22 @@ Web 测试技能提供两种模式的端到端测试工作流：
 
 | 模块 | 路径 | 职责 |
 |------|------|------|
-| Orchestrator | `src/orchestrator/index.ts` | 编排 tester → developer 流程 |
-| Tester-Bridge | `src/orchestrator/tester-bridge.ts` | 转换失败为修复任务 |
-| State-Sync | `src/orchestrator/state-sync.ts` | 同步 checkpoint 状态 |
+| Orchestrator | `.opencode/skills/web-tester/src/orchestrator/index.ts` | 协作模块统一导出 |
+| Tester-Bridge | `.opencode/skills/web-tester/src/orchestrator/tester-bridge.ts` | 转换失败为修复任务 |
+| State-Sync | `.opencode/skills/web-tester/src/orchestrator/state-sync.ts` | 同步 checkpoint 状态 |
 
 **调用示例**：
 
 ```typescript
-import { runTestAndFixFlow } from './src/orchestrator';
+import { bridgeTesterToDeveloper } from './.opencode/skills/web-tester/src/orchestrator';
 
-// test-and-fix 模式
-const result = await runTestAndFixFlow({
-  projectName: 'my-web-app',
-  mode: 'test-and-fix',
-  projectDir: '/path/to/project',
-  testFiles: ['tests/e2e/**/*.spec.ts'],
-  maxFixAttempts: 3
+const bridged = bridgeTesterToDeveloper({
+  testerState,
+  failures,
+  sessionId: 'session-123'
 });
 
-console.log(`Fixed: ${result.fixStats?.fixed}/${result.fixStats?.total}`);
+console.log(bridged.pendingFixes.length);
 ```
 
 ---
